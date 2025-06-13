@@ -13,12 +13,10 @@
 
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
-import { Button } from "@/components/ui/button"; // Tailwind UI button
 
 const socket = io("http://localhost:3000"); // Replace with Railway URL
 
 export default function LobbyGame() {
-  // ========== State ========== //
   const [isHost, setIsHost] = useState(false);
   const [keyphrase, setKeyphrase] = useState("");
   const [enteredKey, setEnteredKey] = useState("");
@@ -30,7 +28,6 @@ export default function LobbyGame() {
   const [gameStarted, setGameStarted] = useState(false);
   const [clickedButtons, setClickedButtons] = useState([]);
 
-  // Host-only config
   const [hostConfig, setHostConfig] = useState({
     picks: 1,
     grandPrizes: [],
@@ -38,13 +35,12 @@ export default function LobbyGame() {
     monetized: false,
     allowDuplicates: false,
     moveGrandPrize: false,
-    moveInterval: 10, // seconds
+    moveInterval: 10,
   });
 
   const [messages, setMessages] = useState([]);
   const [leaderboard, setLeaderboard] = useState({});
 
-  // ========== Socket Setup ========== //
   useEffect(() => {
     socket.on("joined", ({ players }) => setPlayers(players));
     socket.on("startCountdown", () => {
@@ -62,7 +58,6 @@ export default function LobbyGame() {
     return () => socket.disconnect();
   }, []);
 
-  // ========== Host: Create Lobby ========== //
   const createLobby = () => {
     const phrase = Math.random().toString(36).substring(2, 8).toUpperCase();
     setKeyphrase(phrase);
@@ -71,7 +66,6 @@ export default function LobbyGame() {
     socket.emit("createLobby", { keyphrase: phrase, nickname });
   };
 
-  // ========== Player: Join Lobby ========== //
   const joinLobby = () => {
     if (enteredKey.length !== 6 || nickname.trim() === "") return;
     setJoined(true);
@@ -82,7 +76,6 @@ export default function LobbyGame() {
     });
   };
 
-  // ========== Host: Start Game ========== //
   const startGame = () => {
     socket.emit("startGame", {
       keyphrase,
@@ -90,14 +83,12 @@ export default function LobbyGame() {
     });
   };
 
-  // ========== Handle Button Click ========== //
   const handleButtonClick = (buttonNumber) => {
     if (!hostConfig.allowDuplicates && clickedButtons.includes(buttonNumber)) return;
     setClickedButtons((prev) => [...prev, buttonNumber]);
     socket.emit("pickButton", { keyphrase, button: buttonNumber });
   };
 
-  // ========== UI Phases ========== //
   if (!joined) {
     return (
       <div className="p-6 space-y-4">
@@ -120,9 +111,19 @@ export default function LobbyGame() {
             value={entryKey}
             onChange={(e) => setEntryKey(e.target.value)}
           />
-          <Button onClick={joinLobby}>Join Lobby</Button>
+          <button
+            onClick={joinLobby}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded mt-2"
+          >
+            Join Lobby
+          </button>
         </div>
-        <Button onClick={createLobby}>Create Lobby</Button>
+        <button
+          onClick={createLobby}
+          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+        >
+          Create Lobby
+        </button>
       </div>
     );
   }
@@ -190,7 +191,12 @@ export default function LobbyGame() {
                 className="border p-2"
               />
             )}
-            <Button onClick={startGame}>Start Game</Button>
+            <button
+              onClick={startGame}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded"
+            >
+              Start Game
+            </button>
           </div>
         )}
 
