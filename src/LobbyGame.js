@@ -9,15 +9,11 @@
 // - Grand prize move timer
 // - Winner key generation (structure only for now)
 // - Pulse + pop animation on buttons
+// - 9x11 red circular button grid layout
 
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
-const Button = (props) => (
-  <button
-    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
-    {...props}
-  />
-); // Tailwind UI button
+import { Button } from "@/components/ui/button"; // Tailwind UI button
 
 const socket = io("http://localhost:3000"); // Replace with Railway URL
 
@@ -206,11 +202,11 @@ export default function LobbyGame() {
   return (
     <div className="p-6 space-y-6">
       <div className="text-xl font-bold mb-4">Game Board</div>
-      <div className="grid grid-cols-11 gap-3">
+      <div className="grid grid-cols-11 gap-4">
         {Array.from({ length: 99 }, (_, i) => (
           <button
             key={i}
-            className={`w-12 h-12 rounded-full transition-all duration-300
+            className={`w-16 h-16 rounded-full transition-all duration-300
               ${clickedButtons.includes(i + 1)
                 ? hostConfig.allowDuplicates
                   ? "bg-red-900 animate-none"
