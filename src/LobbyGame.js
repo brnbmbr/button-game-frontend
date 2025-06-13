@@ -14,7 +14,7 @@
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:3000"); // Replace with Railway URL
+const socket = io("https://button-game-production.up.railway.app"); // Replace with Railway URL
 
 export default function LobbyGame() {
   const [isHost, setIsHost] = useState(false);
