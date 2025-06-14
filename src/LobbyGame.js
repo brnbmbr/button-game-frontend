@@ -34,6 +34,7 @@ export default function LobbyGame() {
   const [clickCount, setClickCount] = useState(0);
   const [coolingDown, setCoolingDown] = useState(false);
   const [hostIsPlayer, setHostIsPlayer] = useState(true);
+  const [remainingPicks, setRemainingPicks] = useState({});
   const cooldownRef = useRef(null);
 
   // Host-only config
@@ -74,6 +75,10 @@ export default function LobbyGame() {
 
     socket.on("leaderboardUpdate", (lb) => {
       setLeaderboard(lb);
+    });
+
+    socket.on("updateRemainingPicks", (updated) => {
+      setRemainingPicks(updated);
     });
 
     return () => socket.disconnect();
@@ -257,6 +262,17 @@ export default function LobbyGame() {
           ))}
         </ul>
       </div>
+
+      {isHost && (
+        <div className="mt-6">
+          <h2 className="font-bold text-lg">Remaining Picks Per Player</h2>
+          <ul>
+            {Object.entries(remainingPicks).map(([name, remaining], idx) => (
+              <li key={idx}>{name}: {remaining} pick(s) left</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
