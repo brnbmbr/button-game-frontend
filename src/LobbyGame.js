@@ -1,20 +1,22 @@
 // ================================
 // FRONTEND: Button Game (React + Socket.IO)
 // ================================
-// - React frontend UI for multiplayer game
-// - Host can configure prize settings
-// - Lobby system with unique key
-// - Players click buttons to win prizes
-// - Grid of animated red circular buttons
+// Includes:
+// - Host pre-game lobby with settings
+// - Secure prize distribution
+// - Prize + player click sync across all clients
+// - Click cooldown enforcement
+// - Real-time leaderboard (lightweight updates)
+// - Winner confirmation codes
+// - Game lock after start
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
 
-// ===== Connect to backend Socket.IO server ===== //
-const socket = io("https://button-game-production.up.railway.app");
+const socket = io("https://button-game-production.up.railway.app"); // Backend URL
 
 export default function LobbyGame() {
-  // ===== Application State ===== //
+  // ===== State Setup =====
   const [isHost, setIsHost] = useState(false);
   const [keyphrase, setKeyphrase] = useState("");
   const [enteredKey, setEnteredKey] = useState("");
@@ -25,8 +27,16 @@ export default function LobbyGame() {
   const [countdown, setCountdown] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [clickedButtons, setClickedButtons] = useState([]);
+  const [maxPicks, setMaxPicks] = useState(1);
+  const [playerClicks, setPlayerClicks] = useState(0);
+  const [cooldown, setCooldown] = useState(false);
+  const [leaderboard, setLeaderboard] = useState({});
+  const [prizesWon, setPrizesWon] = useState([]);
+  const [winnerCode, setWinnerCode] = useState(null);
 
-  // ===== Host Game Config ===== //
+  const cooldownRef = useRef(null);
+
+  // ===== Host Config =====
   const [hostConfig, setHostConfig] = useState({
     picks: 1,
     grandPrizes: [],
@@ -34,16 +44,12 @@ export default function LobbyGame() {
     monetized: false,
     allowDuplicates: false,
     moveGrandPrize: false,
-    moveInterval: 10,
+    moveInterval: 10
   });
 
-  const [messages, setMessages] = useState([]);
-  const [leaderboard, setLeaderboard] = useState({});
-
-  // ===== Socket.IO Event Listeners ===== //
+  // ===== Effects =====
   useEffect(() => {
     socket.on("joined", ({ players }) => setPlayers(players));
-
     socket.on("startCountdown", () => {
       let time = 10;
       setCountdown(time);
@@ -57,12 +63,21 @@ export default function LobbyGame() {
       }, 1000);
     });
 
-    socket.on("pickResult", ({ message }) => alert(message));
+    socket.on("boardUpdate", ({ buttonNumber }) => {
+      setClickedButtons(prev => [...new Set([...prev, buttonNumber])]);
+    });
+
+    socket.on("prizeWon", ({ message, code }) => {
+      alert(message);
+      if (code) setWinnerCode(code);
+    });
+
+    socket.on("leaderboardUpdate", (data) => setLeaderboard(data));
 
     return () => socket.disconnect();
   }, []);
 
-  // ===== Host: Create Lobby ===== //
+  // ===== Host Lobby Creation =====
   const createLobby = () => {
     const phrase = Math.random().toString(36).substring(2, 8).toUpperCase();
     setKeyphrase(phrase);
@@ -71,7 +86,7 @@ export default function LobbyGame() {
     socket.emit("createLobby", { keyphrase: phrase, nickname });
   };
 
-  // ===== Player: Join Lobby ===== //
+  // ===== Player Lobby Join =====
   const joinLobby = () => {
     if (enteredKey.length !== 6 || nickname.trim() === "") return;
     setJoined(true);
@@ -82,22 +97,32 @@ export default function LobbyGame() {
     });
   };
 
-  // ===== Host: Start Game ===== //
+  // ===== Host Starts Game =====
   const startGame = () => {
+    setMaxPicks(hostConfig.picks);
     socket.emit("startGame", {
       keyphrase,
       config: hostConfig,
     });
   };
 
-  // ===== Player: Click Button ===== //
+  // ===== Button Click Logic =====
   const handleButtonClick = (buttonNumber) => {
-    if (!hostConfig.allowDuplicates && clickedButtons.includes(buttonNumber)) return;
-    setClickedButtons((prev) => [...prev, buttonNumber]);
+    if (cooldown || clickedButtons.includes(buttonNumber)) return;
+    if (playerClicks >= maxPicks) {
+      alert("You're out of picks!");
+      return;
+    }
+
+    setCooldown(true);
+    setTimeout(() => setCooldown(false), 500);
+
+    setPlayerClicks(prev => prev + 1);
+    setClickedButtons(prev => [...prev, buttonNumber]);
     socket.emit("pickButton", { keyphrase, button: buttonNumber });
   };
 
-  // ===== Pre-Join View ===== //
+  // ===== Pre-Game UI =====
   if (!joined) {
     return (
       <div className="p-6 space-y-4">
@@ -120,24 +145,14 @@ export default function LobbyGame() {
             value={entryKey}
             onChange={(e) => setEntryKey(e.target.value)}
           />
-          <button
-            onClick={joinLobby}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded mt-2"
-          >
-            Join Lobby
-          </button>
+          <button className="bg-blue-600 text-white p-2" onClick={joinLobby}>Join Lobby</button>
         </div>
-        <button
-          onClick={createLobby}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
-        >
-          Create Lobby
-        </button>
+        <button className="bg-green-600 text-white p-2" onClick={createLobby}>Create Lobby</button>
       </div>
     );
   }
 
-  // ===== Lobby Phase ===== //
+  // ===== Lobby Phase =====
   if (!gameStarted) {
     return (
       <div className="p-6 space-y-4">
@@ -201,12 +216,7 @@ export default function LobbyGame() {
                 className="border p-2"
               />
             )}
-            <button
-              onClick={startGame}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded"
-            >
-              Start Game
-            </button>
+            <button className="bg-purple-600 text-white p-2" onClick={startGame}>Start Game</button>
           </div>
         )}
 
@@ -215,15 +225,15 @@ export default function LobbyGame() {
     );
   }
 
-  // ===== Game Board Phase ===== //
+  // ===== Game UI =====
   return (
-    <div className="flex flex-col items-center justify-center p-6 space-y-6">
+    <div className="p-6 space-y-6">
       <div className="text-xl font-bold mb-4">Game Board</div>
       <div className="grid grid-cols-11 gap-4">
         {Array.from({ length: 99 }, (_, i) => (
           <button
             key={i}
-            className={`w-20 h-20 rounded-full transition-all duration-300
+            className={`w-16 h-16 rounded-full transition-all duration-300
               ${clickedButtons.includes(i + 1)
                 ? hostConfig.allowDuplicates
                   ? "bg-red-900 animate-none"
@@ -233,6 +243,12 @@ export default function LobbyGame() {
           />
         ))}
       </div>
+
+      {winnerCode && (
+        <div className="text-green-600 font-bold mt-4">
+          You’ve won a prize! Save this code: {winnerCode}
+        </div>
+      )}
     </div>
   );
 }
