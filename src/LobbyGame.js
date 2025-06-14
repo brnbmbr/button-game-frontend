@@ -1,42 +1,40 @@
 // ================================
 // FRONTEND: Button Game (React + Socket.IO)
 // ================================
-// Includes:
-// - Host pre-game lobby with settings
-// - Secure prize distribution
-// - Prize + player click sync across all clients
-// - Click cooldown enforcement
-// - Real-time leaderboard (lightweight updates)
-// - Winner confirmation codes
-// - Game lock after start
+// Features:
+// - Host can configure game (prizes, rules, etc.)
+// - Real-time shared game board
+// - Prize claiming with unique codes
+// - Player pick limits and cooldowns
+// - Red circular buttons in 9x11 grid
+// - Leaderboard and post-game feedback
 
 import { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
 
-const socket = io("https://button-game-production.up.railway.app"); // Backend URL
+// Replace with your Railway backend URL in production
+const socket = io("https://button-game-production.up.railway.app");
 
 export default function LobbyGame() {
-  // ===== State Setup =====
+  // ========== State Management ========== //
   const [isHost, setIsHost] = useState(false);
   const [keyphrase, setKeyphrase] = useState("");
   const [enteredKey, setEnteredKey] = useState("");
   const [joined, setJoined] = useState(false);
-  const [players, setPlayers] = useState([]);
   const [nickname, setNickname] = useState("");
   const [entryKey, setEntryKey] = useState("");
+  const [players, setPlayers] = useState([]);
   const [countdown, setCountdown] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [clickedButtons, setClickedButtons] = useState([]);
-  const [maxPicks, setMaxPicks] = useState(1);
-  const [playerClicks, setPlayerClicks] = useState(0);
-  const [cooldown, setCooldown] = useState(false);
+  const [message, setMessage] = useState("");
   const [leaderboard, setLeaderboard] = useState({});
-  const [prizesWon, setPrizesWon] = useState([]);
-  const [winnerCode, setWinnerCode] = useState(null);
+  const [clickCount, setClickCount] = useState(0);
+  const [coolingDown, setCoolingDown] = useState(false);
 
   const cooldownRef = useRef(null);
 
-  // ===== Host Config =====
+  // Host-only config
   const [hostConfig, setHostConfig] = useState({
     picks: 1,
     grandPrizes: [],
@@ -47,9 +45,10 @@ export default function LobbyGame() {
     moveInterval: 10
   });
 
-  // ===== Effects =====
+  // ========== Socket Setup ========== //
   useEffect(() => {
     socket.on("joined", ({ players }) => setPlayers(players));
+
     socket.on("startCountdown", () => {
       let time = 10;
       setCountdown(time);
@@ -68,16 +67,17 @@ export default function LobbyGame() {
     });
 
     socket.on("prizeWon", ({ message, code }) => {
-      alert(message);
-      if (code) setWinnerCode(code);
+      setMessage(`${message}${code ? `\nPrize Code: ${code}` : ""}`);
     });
 
-    socket.on("leaderboardUpdate", (data) => setLeaderboard(data));
+    socket.on("leaderboardUpdate", (lb) => {
+      setLeaderboard(lb);
+    });
 
     return () => socket.disconnect();
   }, []);
 
-  // ===== Host Lobby Creation =====
+  // ========== Host: Create Lobby ========== //
   const createLobby = () => {
     const phrase = Math.random().toString(36).substring(2, 8).toUpperCase();
     setKeyphrase(phrase);
@@ -86,10 +86,11 @@ export default function LobbyGame() {
     socket.emit("createLobby", { keyphrase: phrase, nickname });
   };
 
-  // ===== Player Lobby Join =====
+  // ========== Player: Join Lobby ========== //
   const joinLobby = () => {
     if (enteredKey.length !== 6 || nickname.trim() === "") return;
     setJoined(true);
+    setKeyphrase(enteredKey.toUpperCase());
     socket.emit("joinLobby", {
       keyphrase: enteredKey.toUpperCase(),
       nickname,
@@ -97,32 +98,27 @@ export default function LobbyGame() {
     });
   };
 
-  // ===== Host Starts Game =====
+  // ========== Host: Start Game ========== //
   const startGame = () => {
-    setMaxPicks(hostConfig.picks);
     socket.emit("startGame", {
       keyphrase,
-      config: hostConfig,
+      config: hostConfig
     });
   };
 
-  // ===== Button Click Logic =====
+  // ========== Handle Button Click ========== //
   const handleButtonClick = (buttonNumber) => {
-    if (cooldown || clickedButtons.includes(buttonNumber)) return;
-    if (playerClicks >= maxPicks) {
-      alert("You're out of picks!");
-      return;
-    }
+    if (coolingDown || clickedButtons.includes(buttonNumber)) return;
+    if (clickCount >= hostConfig.picks) return;
 
-    setCooldown(true);
-    setTimeout(() => setCooldown(false), 500);
+    setCoolingDown(true);
+    cooldownRef.current = setTimeout(() => setCoolingDown(false), 500);
+    setClickCount(prev => prev + 1);
 
-    setPlayerClicks(prev => prev + 1);
-    setClickedButtons(prev => [...prev, buttonNumber]);
     socket.emit("pickButton", { keyphrase, button: buttonNumber });
   };
 
-  // ===== Pre-Game UI =====
+  // ========== UI Rendering ========== //
   if (!joined) {
     return (
       <div className="p-6 space-y-4">
@@ -145,14 +141,13 @@ export default function LobbyGame() {
             value={entryKey}
             onChange={(e) => setEntryKey(e.target.value)}
           />
-          <button className="bg-blue-600 text-white p-2" onClick={joinLobby}>Join Lobby</button>
+          <button onClick={joinLobby} className="bg-blue-500 text-white px-4 py-2 rounded">Join Lobby</button>
         </div>
-        <button className="bg-green-600 text-white p-2" onClick={createLobby}>Create Lobby</button>
+        <button onClick={createLobby} className="bg-green-500 text-white px-4 py-2 rounded">Create Lobby</button>
       </div>
     );
   }
 
-  // ===== Lobby Phase =====
   if (!gameStarted) {
     return (
       <div className="p-6 space-y-4">
@@ -176,17 +171,13 @@ export default function LobbyGame() {
             <label className="block">Grand Prizes (one per line)</label>
             <textarea
               value={hostConfig.grandPrizes.join("\n")}
-              onChange={(e) =>
-                setHostConfig({ ...hostConfig, grandPrizes: e.target.value.split("\n") })
-              }
+              onChange={(e) => setHostConfig({ ...hostConfig, grandPrizes: e.target.value.split("\n") })}
               className="w-full border p-2"
             />
             <label className="block">Consolation Prizes (one per line)</label>
             <textarea
               value={hostConfig.consolationPrizes.join("\n")}
-              onChange={(e) =>
-                setHostConfig({ ...hostConfig, consolationPrizes: e.target.value.split("\n") })
-              }
+              onChange={(e) => setHostConfig({ ...hostConfig, consolationPrizes: e.target.value.split("\n") })}
               className="w-full border p-2"
             />
             <label className="block">Monetized Game?</label>
@@ -216,7 +207,7 @@ export default function LobbyGame() {
                 className="border p-2"
               />
             )}
-            <button className="bg-purple-600 text-white p-2" onClick={startGame}>Start Game</button>
+            <button onClick={startGame} className="bg-purple-500 text-white px-4 py-2 rounded">Start Game</button>
           </div>
         )}
 
@@ -225,11 +216,12 @@ export default function LobbyGame() {
     );
   }
 
-  // ===== Game UI =====
   return (
     <div className="p-6 space-y-6">
       <div className="text-xl font-bold mb-4">Game Board</div>
-      <div className="grid grid-cols-11 gap-4">
+      {message && <div className="text-green-600 font-semibold">{message}</div>}
+
+      <div className="grid grid-cols-11 gap-4 justify-center">
         {Array.from({ length: 99 }, (_, i) => (
           <button
             key={i}
@@ -244,11 +236,14 @@ export default function LobbyGame() {
         ))}
       </div>
 
-      {winnerCode && (
-        <div className="text-green-600 font-bold mt-4">
-          You’ve won a prize! Save this code: {winnerCode}
-        </div>
-      )}
+      <div className="mt-6">
+        <h2 className="font-bold text-lg">Leaderboard</h2>
+        <ul>
+          {Object.entries(leaderboard).map(([name, prize], idx) => (
+            <li key={idx}>{name}: {prize}</li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
