@@ -6,6 +6,8 @@
 // - Real-time shared game board
 // - Prize claiming with unique codes
 // - Player pick limits and cooldowns
+// - Host can opt out of gameplay
+// - Host sees remaining picks per player
 // - Red circular buttons in 9x11 grid
 // - Leaderboard and post-game feedback
 
@@ -31,7 +33,7 @@ export default function LobbyGame() {
   const [leaderboard, setLeaderboard] = useState({});
   const [clickCount, setClickCount] = useState(0);
   const [coolingDown, setCoolingDown] = useState(false);
-
+  const [hostIsPlayer, setHostIsPlayer] = useState(true);
   const cooldownRef = useRef(null);
 
   // Host-only config
@@ -102,12 +104,13 @@ export default function LobbyGame() {
   const startGame = () => {
     socket.emit("startGame", {
       keyphrase,
-      config: hostConfig
+      config: { ...hostConfig, hostIsPlayer }
     });
   };
 
   // ========== Handle Button Click ========== //
   const handleButtonClick = (buttonNumber) => {
+    if (!hostIsPlayer && isHost) return;
     if (coolingDown || clickedButtons.includes(buttonNumber)) return;
     if (clickCount >= hostConfig.picks) return;
 
@@ -171,13 +174,17 @@ export default function LobbyGame() {
             <label className="block">Grand Prizes (one per line)</label>
             <textarea
               value={hostConfig.grandPrizes.join("\n")}
-              onChange={(e) => setHostConfig({ ...hostConfig, grandPrizes: e.target.value.split("\n") })}
+              onChange={(e) =>
+                setHostConfig({ ...hostConfig, grandPrizes: e.target.value.split("\n") })
+              }
               className="w-full border p-2"
             />
             <label className="block">Consolation Prizes (one per line)</label>
             <textarea
               value={hostConfig.consolationPrizes.join("\n")}
-              onChange={(e) => setHostConfig({ ...hostConfig, consolationPrizes: e.target.value.split("\n") })}
+              onChange={(e) =>
+                setHostConfig({ ...hostConfig, consolationPrizes: e.target.value.split("\n") })
+              }
               className="w-full border p-2"
             />
             <label className="block">Monetized Game?</label>
@@ -207,6 +214,12 @@ export default function LobbyGame() {
                 className="border p-2"
               />
             )}
+            <label className="block">Can Host Play?</label>
+            <input
+              type="checkbox"
+              checked={hostIsPlayer}
+              onChange={(e) => setHostIsPlayer(e.target.checked)}
+            />
             <button onClick={startGame} className="bg-purple-500 text-white px-4 py-2 rounded">Start Game</button>
           </div>
         )}
