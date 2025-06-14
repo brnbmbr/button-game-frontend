@@ -1,22 +1,20 @@
 // ================================
 // FRONTEND: Button Game (React + Socket.IO)
 // ================================
-// Updated version includes:
-// - Host pre-game lobby settings
-// - Monetized entry with key validation
-// - Prize config & pick rules
-// - Optional button disappearance
-// - Grand prize move timer
-// - Winner key generation (structure only for now)
-// - Pulse + pop animation on buttons
-// - 9x11 red circular button grid layout
+// - React frontend UI for multiplayer game
+// - Host can configure prize settings
+// - Lobby system with unique key
+// - Players click buttons to win prizes
+// - Grid of animated red circular buttons
 
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
-const socket = io("https://button-game-production.up.railway.app"); // Replace with Railway URL
+// ===== Connect to backend Socket.IO server ===== //
+const socket = io("https://button-game-production.up.railway.app");
 
 export default function LobbyGame() {
+  // ===== Application State ===== //
   const [isHost, setIsHost] = useState(false);
   const [keyphrase, setKeyphrase] = useState("");
   const [enteredKey, setEnteredKey] = useState("");
@@ -28,6 +26,7 @@ export default function LobbyGame() {
   const [gameStarted, setGameStarted] = useState(false);
   const [clickedButtons, setClickedButtons] = useState([]);
 
+  // ===== Host Game Config ===== //
   const [hostConfig, setHostConfig] = useState({
     picks: 1,
     grandPrizes: [],
@@ -41,8 +40,10 @@ export default function LobbyGame() {
   const [messages, setMessages] = useState([]);
   const [leaderboard, setLeaderboard] = useState({});
 
+  // ===== Socket.IO Event Listeners ===== //
   useEffect(() => {
     socket.on("joined", ({ players }) => setPlayers(players));
+
     socket.on("startCountdown", () => {
       let time = 10;
       setCountdown(time);
@@ -55,9 +56,13 @@ export default function LobbyGame() {
         }
       }, 1000);
     });
+
+    socket.on("pickResult", ({ message }) => alert(message));
+
     return () => socket.disconnect();
   }, []);
 
+  // ===== Host: Create Lobby ===== //
   const createLobby = () => {
     const phrase = Math.random().toString(36).substring(2, 8).toUpperCase();
     setKeyphrase(phrase);
@@ -66,6 +71,7 @@ export default function LobbyGame() {
     socket.emit("createLobby", { keyphrase: phrase, nickname });
   };
 
+  // ===== Player: Join Lobby ===== //
   const joinLobby = () => {
     if (enteredKey.length !== 6 || nickname.trim() === "") return;
     setJoined(true);
@@ -76,6 +82,7 @@ export default function LobbyGame() {
     });
   };
 
+  // ===== Host: Start Game ===== //
   const startGame = () => {
     socket.emit("startGame", {
       keyphrase,
@@ -83,12 +90,14 @@ export default function LobbyGame() {
     });
   };
 
+  // ===== Player: Click Button ===== //
   const handleButtonClick = (buttonNumber) => {
     if (!hostConfig.allowDuplicates && clickedButtons.includes(buttonNumber)) return;
     setClickedButtons((prev) => [...prev, buttonNumber]);
     socket.emit("pickButton", { keyphrase, button: buttonNumber });
   };
 
+  // ===== Pre-Join View ===== //
   if (!joined) {
     return (
       <div className="p-6 space-y-4">
@@ -128,6 +137,7 @@ export default function LobbyGame() {
     );
   }
 
+  // ===== Lobby Phase ===== //
   if (!gameStarted) {
     return (
       <div className="p-6 space-y-4">
@@ -205,14 +215,15 @@ export default function LobbyGame() {
     );
   }
 
+  // ===== Game Board Phase ===== //
   return (
-    <div className="p-6 space-y-6">
+    <div className="flex flex-col items-center justify-center p-6 space-y-6">
       <div className="text-xl font-bold mb-4">Game Board</div>
       <div className="grid grid-cols-11 gap-4">
         {Array.from({ length: 99 }, (_, i) => (
           <button
             key={i}
-            className={`w-16 h-16 rounded-full transition-all duration-300
+            className={`w-20 h-20 rounded-full transition-all duration-300
               ${clickedButtons.includes(i + 1)
                 ? hostConfig.allowDuplicates
                   ? "bg-red-900 animate-none"
